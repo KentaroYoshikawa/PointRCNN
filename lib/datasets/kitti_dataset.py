@@ -7,19 +7,21 @@ from PIL import Image
 
 
 class KittiDataset(torch_data.Dataset):
-    def __init__(self, root_dir, split='train'):
+    def __init__(self, root_dir, video_id, split='train'):
+        self.video_id = video_id
+
         self.split = split
         is_test = self.split == 'test'
         self.imageset_dir = os.path.join(root_dir, 'KITTI', 'object', 'testing' if is_test else 'training')
 
-        split_dir = os.path.join(root_dir, 'KITTI', 'ImageSets', split + '.txt')
+        split_dir = os.path.join(root_dir, 'KITTI', 'ImageSets', self.video_id, split + '.txt')
         self.image_idx_list = [x.strip() for x in open(split_dir).readlines()]
         self.num_sample = self.image_idx_list.__len__()
 
-        self.image_dir = os.path.join(self.imageset_dir, 'image_2')
-        self.lidar_dir = os.path.join(self.imageset_dir, 'velodyne')
+        self.image_dir = os.path.join(self.imageset_dir, f'image_2/{self.video_id}')
+        self.lidar_dir = os.path.join(self.imageset_dir, f'velodyne/{self.video_id}')
         self.calib_dir = os.path.join(self.imageset_dir, 'calib')
-        self.label_dir = os.path.join(self.imageset_dir, 'label_2')
+        self.label_dir = os.path.join(self.imageset_dir, f'label_2/{self.video_id}')
         self.plane_dir = os.path.join(self.imageset_dir, 'planes')
 
     def get_image(self, idx):
@@ -43,7 +45,8 @@ class KittiDataset(torch_data.Dataset):
         return np.fromfile(lidar_file, dtype=np.float32).reshape(-1, 4)
 
     def get_calib(self, idx):
-        calib_file = os.path.join(self.calib_dir, '%06d.txt' % idx)
+        #calib_file = os.path.join(self.calib_dir, '%04d.txt' % idx)
+        calib_file = os.path.join(self.calib_dir, f"{self.video_id}.txt")
         assert os.path.exists(calib_file)
         return calibration.Calibration(calib_file)
 

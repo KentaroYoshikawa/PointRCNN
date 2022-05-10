@@ -1,0 +1,9 @@
+scipy
+pillow
+scikit-image
+pyyaml
+numba
+fire
+tensorboardX
+easydict
+tqdm

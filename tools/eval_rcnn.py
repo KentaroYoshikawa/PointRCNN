@@ -14,6 +14,7 @@ from lib.config import cfg, cfg_from_file, save_config_to_file, cfg_from_list
 import argparse
 import lib.utils.kitti_utils as kitti_utils
 import lib.utils.iou3d.iou3d_utils as iou3d_utils
+from lib.utils.object3d import cls_type_to_id
 from datetime import datetime
 import logging
 import re
@@ -53,6 +54,8 @@ parser.add_argument("--rcnn_eval_feature_dir", type=str, default=None,
                     help='specify the saved features for rcnn evaluation when using rcnn_offline mode')
 parser.add_argument('--set', dest='set_cfgs', default=None, nargs=argparse.REMAINDER,
                     help='set extra config keys if needed')
+parser.add_argument('--start_video_id', required=True, type=str)
+parser.add_argument('--end_video_id', required=True, type=str)
 args = parser.parse_args()
 
 
@@ -88,10 +91,16 @@ def save_kitti_format(sample_id, calib, bbox3d, kitti_output_dir, scores, img_sh
             beta = np.arctan2(z, x)
             alpha = -np.sign(beta) * np.pi / 2 + beta + ry
 
+            """
             print('%s -1 -1 %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f' %
                   (cfg.CLASSES, alpha, img_boxes[k, 0], img_boxes[k, 1], img_boxes[k, 2], img_boxes[k, 3],
                    bbox3d[k, 3], bbox3d[k, 4], bbox3d[k, 5], bbox3d[k, 0], bbox3d[k, 1], bbox3d[k, 2],
                    bbox3d[k, 6], scores[k]), file=f)
+            """
+            print('%d %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f' % 
+                    (sample_id, cls_type_to_id(cfg.CLASSES), img_boxes[k, 0], img_boxes[k, 1], img_boxes[k, 2], img_boxes[k, 3],
+                    scores[k], bbox3d[k, 3], bbox3d[k, 4], bbox3d[k, 5], bbox3d[k, 0], bbox3d[k, 1], bbox3d[k, 2],
+                    bbox3d[k, 6], alpha), file=f)
 
 
 def save_rpn_features(seg_result, rpn_scores_raw, pts_features, backbone_xyz, backbone_features, kitti_features_dir,
@@ -462,6 +471,10 @@ def eval_one_epoch_joint(model, dataloader, epoch_id, result_dir, logger):
     mode = 'TEST' if args.test else 'EVAL'
 
     final_output_dir = os.path.join(result_dir, 'final_result', 'data')
+    if os.path.exists(final_output_dir):
+        old_result_files = os.listdir(final_output_dir)
+        for old_result_file in old_result_files:
+            os.remove(os.path.join(final_output_dir, old_result_file))
     os.makedirs(final_output_dir, exist_ok=True)
 
     if args.save_result:
@@ -629,7 +642,7 @@ def eval_one_epoch_joint(model, dataloader, epoch_id, result_dir, logger):
 
     progress_bar.close()
     # dump empty files
-    split_file = os.path.join(dataset.imageset_dir, '..', '..', 'ImageSets', dataset.split + '.txt')
+    split_file = os.path.join(dataset.imageset_dir, '..', '..', 'ImageSets', args.video_id, dataset.split + '.txt')
     split_file = os.path.abspath(split_file)
     image_idx_list = [x.strip() for x in open(split_file).readlines()]
     empty_cnt = 0
@@ -671,6 +684,7 @@ def eval_one_epoch_joint(model, dataloader, epoch_id, result_dir, logger):
                                                                       total_gt_bbox, cur_recall))
         ret_dict['rcnn_recall(thresh=%.2f)' % thresh] = cur_recall
 
+    """
     if cfg.TEST.SPLIT != 'test':
         logger.info('Averate Precision:')
         name_to_class = {'Car': 0, 'Pedestrian': 1, 'Cyclist': 2}
@@ -678,6 +692,16 @@ def eval_one_epoch_joint(model, dataloader, epoch_id, result_dir, logger):
                                                 current_class=name_to_class[cfg.CLASSES])
         logger.info(ap_result_str)
         ret_dict.update(ap_dict)
+    """
+    # aggregate final_results
+    result_files = os.listdir(final_output_dir)
+    result_lines = []
+    for result_file in result_files:
+        with open(os.path.join(final_output_dir, result_file)) as f:
+            lines = f.readlines()
+            result_lines += lines
+    with open(os.path.join(result_dir, "%04d.txt" % int(args.video_id)), "w+") as f:
+        f.write("".join(result_lines))
 
     logger.info('result is saved to: %s' % result_dir)
     return ret_dict
@@ -846,7 +870,7 @@ def create_dataloader(logger):
     DATA_PATH = os.path.join('..', 'data')
 
     # create dataloader
-    test_set = KittiRCNNDataset(root_dir=DATA_PATH, npoints=cfg.RPN.NUM_POINTS, split=cfg.TEST.SPLIT, mode=mode,
+    test_set = KittiRCNNDataset(root_dir=DATA_PATH, video_id=args.video_id, npoints=cfg.RPN.NUM_POINTS, split=cfg.TEST.SPLIT, mode=mode,
                                 random_select=args.random_select,
                                 rcnn_eval_roi_dir=args.rcnn_eval_roi_dir,
                                 rcnn_eval_feature_dir=args.rcnn_eval_feature_dir,
@@ -899,4 +923,6 @@ if __name__ == "__main__":
             assert os.path.exists(ckpt_dir), '%s' % ckpt_dir
             repeat_eval_ckpt(root_result_dir, ckpt_dir)
         else:
-            eval_single_ckpt(root_result_dir)
+            for i in range(int(args.start_video_id), int(args.end_video_id)+1):
+                args.video_id = "%04d" % i
+                eval_single_ckpt(root_result_dir)

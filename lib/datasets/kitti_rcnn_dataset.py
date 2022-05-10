@@ -10,10 +10,10 @@ from lib.config import cfg
 
 
 class KittiRCNNDataset(KittiDataset):
-    def __init__(self, root_dir, npoints=16384, split='train', classes='Car', mode='TRAIN', random_select=True,
+    def __init__(self, root_dir, video_id, npoints=16384, split='train', classes='Car', mode='TRAIN', random_select=True,
                  logger=None, rcnn_training_roi_dir=None, rcnn_training_feature_dir=None, rcnn_eval_roi_dir=None,
                  rcnn_eval_feature_dir=None, gt_database_dir=None):
-        super().__init__(root_dir=root_dir, split=split)
+        super().__init__(root_dir=root_dir, video_id=video_id, split=split)
         if classes == 'Car':
             self.classes = ('Background', 'Car')
             aug_scene_root_dir = os.path.join(root_dir, 'KITTI', 'aug_scene')

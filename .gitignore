@@ -11,3 +11,7 @@
 **/dist
 tools/gt_database/
 tools/PointRCNN.pth
+.DS_Store
+
+!tools/cfgs/default.yaml
+!doc/teaser.png
